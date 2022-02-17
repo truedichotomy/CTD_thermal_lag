@@ -1,0 +1,68 @@
+
+
+%% correct pressure sensor lag
+
+% P_sensor_lag = 0.6 s, based on Kim Martini power point, 
+% where she minimized difference between thermal cline depth of down and up casts
+P_sensor_lag = 0.6; 
+
+segment_data.pressure_lag_shifted = correctSensorLag(segment_data.time, ...
+    segment_data.pressure, P_sensor_lag);
+
+% apply the same time lag (as pressure sensor) to temperature and conductivity data
+% assumption is that this is a time lag for the GPCTD
+
+segment_data.temperature_lag_shifted = correctSensorLag(segment_data.time, ...
+    segment_data.temperature, P_sensor_lag);
+
+segment_data.conductivity_lag_shifted1 = correctSensorLag(segment_data.time, ...
+    segment_data.conductivity, P_sensor_lag);
+
+
+%% Thermister reponse correction for  temperature data
+
+
+dt = segment_data.time(2:end) - segment_data.time(1:end-1);
+dtemp = segment_data.temperature_lag_shifted(2:end) - segment_data.temperature_lag_shifted(1:end-1);
+
+dT_dt = dtemp./dt;
+
+dT_dt_smooth = smoothdata(dT_dt,'movmean',3);
+
+
+% ???
+% according to Kim Martini's slides:
+% "Response time for this temperature sensor construction can range from 0.1-0.6 seconds. 
+% This can vary depending on the pump and profiling speed of the platform."
+
+tau_T = 0.53; % in seconds. nominal value is 0.5 second based on Johnson et al. 2007
+
+    
+   segment_data.temperature_response_corrected = segment_data.temperature_lag_shifted;
+    segment_data.temperature_response_corrected(2:end) = ...
+        segment_data.temperature_lag_shifted(2:end) + tau_T.*dT_dt;
+
+%% apply thermistor-conductivity cell seperation lag correction
+% Vol = 3; % volume of condutivity cell in ml, based on ANFOG manual
+Vol = 1.5; % based on diagram from Kim Martini of Sea-Bird.
+Q = 10; % flow rate in ml/s.
+
+TC_sensor_lag = Vol/Q;
+segment_data.conductivity_lag_shifted = correctSensorLag(segment_data.time, ...
+    segment_data.conductivity_lag_shifted1, TC_sensor_lag);
+
+%%
+profile_time = unique(segment_data.profile_time);
+
+n_pair = size(profile_time,1)/2;
+
+down_indices = [];
+up_indices = [];
+
+for iter = 1:n_pair
+    down_index = find(segment_data.profile_time == profile_time(2*iter));
+    up_index = find(segment_data.profile_time == profile_time(2*iter+1));
+    
+    down_indices = vertcat(down_indices, down_index);
+    up_indices = vertcat(up_indices, up_index);
+end
