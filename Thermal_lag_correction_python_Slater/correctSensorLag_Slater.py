@@ -21,8 +21,8 @@ def correctSensorLag_Slater(timestamp, raw, params, flow=0):
         # Positive time check to filter out bad initial lines on Slocum data.
         valid = timestamp > 0 & ~(np.isnan(raw) | np.isnan(flow))
         # Compute dynamic time lag parameter inversely proportional to flow speed.
-        tau_offset = params(1)
-        tau_slope = params(2)
+        tau_offset = params[0]
+        tau_slope = params[1]
         tau = tau_offset + np.divide(tau_slope,flow(valid))
 
     cor = np.empty((len(raw),len(raw)))
@@ -30,7 +30,6 @@ def correctSensorLag_Slater(timestamp, raw, params, flow=0):
     raw_valid = raw.loc[valid]
     timestamp_unique = timestamp_valid.unique()
 
-    tau = params
     if len(timestamp) > 1:
     # del = [0; diff(raw_valid) ./ diff(timestamp_valid)];
     # cor(valid) = raw_val + tau .* del;
