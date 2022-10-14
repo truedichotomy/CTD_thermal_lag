@@ -5,9 +5,14 @@ import xarray as xr
 import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime
-from scipy.interpolate import interp1d
+import scipy as sp
 import time
+import p2t
+from scipy.spatial import Delaunay
+
 from correctSensorLag_Slater import *
+from correctThermalLag_Slater import *
+
 np.seterr(divide='ignore', invalid='ignore')
 
 start_time = time.time()
@@ -211,3 +216,35 @@ for iter in range(n_profiles):
 print("--- %s seconds ---" % (time.time() - start_time))
 #profile_stats.to_clipboard()
 #sci_data.to_clipboard()
+
+#pointx = sci_data[sci_data['profile_id']==2]['temperature']
+#pointx2 = sci_data[sci_data['profile_id']==3]['temperature']
+#pointx3 = np.append(pointx,pointx2)
+#pointy = sci_data[sci_data['profile_id']==2]['salinity']
+#pointy2 = sci_data[sci_data['profile_id']==3]['salinity']
+#pointy3 = np.append(pointy,pointy2)
+#points = np.concatenate([pointx3[:,None],pointy3[:,None]], axis=1)
+#print(points)
+
+#tri = Delaunay(points,qhull_options='QJ')
+#plt.triplot(points[:,0], points[:,1], tri.simplices)
+#plt.plot(points[:,0], points[:,1], 'o')
+#plt.show()
+
+
+#A = dict(vertices=points)
+#B = tr.triangulate(A, 'p')
+#tr.compare(plt, A, B)
+#plt.show()
+
+
+
+#tri = Delaunay(points,qhull_options='QJ')
+#plt.triplot(points[:,0], points[:,1], tri.simplices)
+#plt.plot(points[:,0], points[:,1], 'o')
+#plt.show()
+
+
+#plt.scatter(sci_data[sci_data['profile_id'] == 782]['salinity'], sci_data[sci_data['profile_id'] == 782]['temperature'], s = 4)
+#plt.scatter(sci_data[sci_data['profile_id'] == 783]['salinity'], sci_data[sci_data['profile_id'] == 783]['temperature'], c = 'r', s = 4)
+#plt.show()
