@@ -26,8 +26,8 @@ def correctSensorLag_Slater(timestamp, raw, params, flow=0):
         tau = tau_offset + np.divide(tau_slope,flow(valid))
 
     cor = np.empty((len(raw),len(raw)))
-    timestamp_valid = timestamp.loc[valid]
-    raw_valid = raw.loc[valid]
+    timestamp_valid = timestamp[valid]
+    raw_valid = raw[valid]
     timestamp_unique = timestamp_valid.unique()
 
     if len(timestamp) > 1:
