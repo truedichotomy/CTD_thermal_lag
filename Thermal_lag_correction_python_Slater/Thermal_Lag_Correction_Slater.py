@@ -1,17 +1,17 @@
 from cmath import nan
 from operator import index
 import dask.dataframe as dd
+import pandas as pd
 import xarray as xr
 import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime
-import scipy as sp
 import time
-import p2t
-from scipy.spatial import Delaunay
+import gsw
 
-from correctSensorLag_Slater import *
-from correctThermalLag_Slater import *
+import correctSensorLag_Slater as csLag
+import correctThermalLag_Slater as ctLag
+import findThermalLagParams_Slater as ftlp
 
 np.seterr(divide='ignore', invalid='ignore')
 
@@ -46,11 +46,11 @@ P_sensor_lag = 0; # 0, assuming pressure is recorded correctly and instantly as 
 # P_sensor_lag = 0.6 s, based on Kim Martini power point,
 # where she minimized difference between thermal cline depth of down and up casts
 
-sci_data['pressure_lag_shifted'] = correctSensorLag_Slater(sci_data['ctd_time'], sci_data['pressure'], P_sensor_lag)
+sci_data['pressure_lag_shifted'] = csLag.correctSensorLag(sci_data['ctd_time'], sci_data['pressure'], P_sensor_lag)
 
-sci_data['z_lag_shifted'] = correctSensorLag_Slater(sci_data['ctd_time'], sci_data['z'], P_sensor_lag)
+sci_data['z_lag_shifted'] = csLag.correctSensorLag(sci_data['ctd_time'], sci_data['z'], P_sensor_lag)
 
-sci_data['temperature_lag_shifted'] = correctSensorLag_Slater(sci_data['ctd_time'], sci_data['temperature'], P_sensor_lag)
+sci_data['temperature_lag_shifted'] = csLag.correctSensorLag(sci_data['ctd_time'], sci_data['temperature'], P_sensor_lag)
 
 #smoothing
 
@@ -66,7 +66,7 @@ Q = 10; # flow rate in ml/s.
 
 TC_sensor_lag = Vol/Q
 
-sci_data['conductivity_lag_shifted'] = correctSensorLag_Slater(sci_data['ctd_time'], sci_data['conductivity'], TC_sensor_lag)
+sci_data['conductivity_lag_shifted'] = csLag.correctSensorLag(sci_data['ctd_time'], sci_data['conductivity'], TC_sensor_lag)
 
 sci_data['conductivity_lag_shifted_smooth'] = sci_data['conductivity_lag_shifted'].rolling(mov_window, min_periods=1, center=True).mean()
 
@@ -211,11 +211,55 @@ for iter in range(n_profiles):
 
 #Step 3
 
+time1 = np.array(sci_data[sci_data['profile_id']==2]['ctd_time'])
+temp1 = np.array(sci_data[sci_data['profile_id']==2]['temperature'])
+cond1 = np.array(sci_data[sci_data['profile_id']==2]['conductivity'])
+pres1 = np.array(sci_data[sci_data['profile_id']==2]['pressure'])
+time2 = np.array(sci_data[sci_data['profile_id']==3]['ctd_time'])
+temp2 = np.array(sci_data[sci_data['profile_id']==3]['temperature'])
+cond2 = np.array(sci_data[sci_data['profile_id']==3]['conductivity'])
+pres2 = np.array(sci_data[sci_data['profile_id']==3]['pressure'])
+lat1 = np.array(sci_data[sci_data['profile_id']==2]['latitude'])
+lon1 = np.array(sci_data[sci_data['profile_id']==2]['longitude'])
+lat2 = np.array(sci_data[sci_data['profile_id']==3]['latitude'])
+lon2 = np.array(sci_data[sci_data['profile_id']==3]['longitude'])
 
+params = ftlp.findThermalLagParams(time1, cond1, temp1, pres1, time2, cond2, temp2, pres2)
+
+[temp_inside1,cond_outside1] = ctLag.correctThermalLag(time1,cond1,temp1,params.x)
+[temp_inside2,cond_outside2] = ctLag.correctThermalLag(time2,cond2,temp2,params.x)
+
+salt_cor1 = gsw.SP_from_C(np.multiply(cond_outside1,10),temp1,pres1)
+salt_cor2 = gsw.SP_from_C(np.multiply(cond_outside2,10),temp2,pres2)
+
+saltA_outside1 = gsw.SA_from_SP(salt_cor1,pres1,lon1,lat1)
+saltA_outside2 = gsw.SA_from_SP(salt_cor2,pres2,lon2,lat2)
+
+temp_outside1 = gsw.CT_from_t(saltA_outside1, temp1, pres1)
+temp_outside2 = gsw.CT_from_t(saltA_outside2, temp2, pres2)
+
+fig, ax = plt.subplots(2, figsize=(10, 6))
+
+cor_upcast = ax[0].scatter(temp_outside1,salt_cor1, s=10)
+cor_downcast = ax[0].scatter(temp_outside2,salt_cor2, s=10)
+ax[0].set_title('TS Diagram After Correction')
+ax[0].set_xlabel('Temperature (C)')
+ax[0].set_ylabel('Salinity')
+ax[0].legend([cor_upcast,cor_downcast],['Upcast','Downcast'])
+upcast = ax[1].scatter(temp1,np.array(sci_data[sci_data['profile_id']==2]['salinity']),s=10)
+downcast = ax[1].scatter(temp2,np.array(sci_data[sci_data['profile_id']==3]['salinity']),s=10)
+ax[1].set_title('TS Diagram Before Correction')
+ax[1].set_xlabel('Temperature (C)')
+ax[1].set_ylabel('Salinity')
+ax[1].legend([upcast,downcast],['Upcast','Downcast'])
+fig.tight_layout()
+plt.show()
 
 print("--- %s seconds ---" % (time.time() - start_time))
 #profile_stats.to_clipboard()
 #sci_data.to_clipboard()
+
+
 
 #pointx = sci_data[sci_data['profile_id']==2]['temperature']
 #pointx2 = sci_data[sci_data['profile_id']==3]['temperature']
@@ -248,3 +292,26 @@ print("--- %s seconds ---" % (time.time() - start_time))
 #plt.scatter(sci_data[sci_data['profile_id'] == 782]['salinity'], sci_data[sci_data['profile_id'] == 782]['temperature'], s = 4)
 #plt.scatter(sci_data[sci_data['profile_id'] == 783]['salinity'], sci_data[sci_data['profile_id'] == 783]['temperature'], c = 'r', s = 4)
 #plt.show()
+
+#from shapely.geometry import MultiPoint
+#from shapely.ops import triangulate
+#import shapely.geometry as spg
+
+
+#from matplotlib import pyplot
+#from descartes.patch import PolygonPatch
+
+
+#pointsyuh=MultiPoint(points)
+#triangles = triangulate(pointsyuh)
+
+#fig = pyplot.figure(1, dpi=90)
+#fig.set_frameon(True)
+#ax = fig.add_subplot(111)
+
+#for triangle in triangles:
+#    patch = PolygonPatch(triangle, alpha=0.5, zorder=2)
+#    ax.add_patch(patch)
+
+#for point in pointsyuh:
+#    pyplot.plot(point.x, point.y, 'o')
