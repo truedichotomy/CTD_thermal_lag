@@ -4,7 +4,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 import pandas as pd
 
-def correctSensorLag_Slater(timestamp, raw, params, flow=0):
+def correctSensorLag(timestamp, raw, params, flow=0):
     
     if flow == 0:
         constant_flow = True
