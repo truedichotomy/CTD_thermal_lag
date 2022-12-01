@@ -28,7 +28,7 @@ def findThermalLagParams_SP(time1, cond1, temp1, pres1, thermocline_pres1, time2
 
         dens_min = np.maximum(np.amin(dens_cor1),np.amin(dens_cor2))
         dens_max = np.minimum(np.amax(dens_cor1),np.amax(dens_cor2))
-
+        
         dens_mask1 = (dens_min <= dens_cor1) & (dens_cor1 <= dens_max)
         dens_mask2 = (dens_min <= dens_cor2) & (dens_cor2 <= dens_max)
 
