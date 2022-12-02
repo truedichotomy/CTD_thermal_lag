@@ -1,5 +1,3 @@
-from operator import index
-import dask.dataframe as dd
 import pandas as pd
 import xarray as xr
 import matplotlib.pyplot as plt
@@ -18,7 +16,11 @@ np.seterr(divide='ignore', invalid='ignore')
 start_time = time.time()
 
 #load dataset retrieved as .nc from "http://slocum-data.marine.rutgers.edu/erddap/tabledap/index.html?page=1&itemsPerPage=1000"
-ds = xr.open_dataset('/Users/jack/Documents/MARACOOS_02Jul_Aug2021_Haixing_Wang/maracoos_02-20210716T1814-profile-sci-delayed_71b8_2232_e294.nc')
+#'/Users/jack/Documents/MARACOOS_02Jul_Aug2021_Haixing_Wang/maracoos_02-20210716T1814-profile-sci-delayed_71b8_2232_e294.nc'
+
+netcdfdata = '/Users/jack/Documents/GitHub/CTD_thermal_lag/Thermal_lag_correction_python_Slater/test_data/maracoos_02-20210716T1814-profile-sci-delayed_71b8_2232_e294.nc'
+
+ds = xr.open_dataset(netcdfdata)
 
 #convert to pandas dataframe named "glider_sci"
 glider_sci = ds.to_dataframe()
@@ -110,6 +112,7 @@ profile_pressure_range_cutoff = 5; # dbar
 temperature_diff_cutoff = 4; # C
 profile_stats = pd.DataFrame()
 
+profile_stats['profile_time'] = sci_data.groupby('profile_id')['profile_time'].agg('first')
 profile_stats['n_profile_values'] = sci_data.groupby('profile_id')['ctd_time'].agg('count')
 profile_stats['pressure_diff'] = sci_data.groupby('profile_id')['pressure'].agg('last') - sci_data.groupby('profile_id')['pressure'].agg('first')
 profile_stats['temperature_diff'] = sci_data.groupby('profile_id')['temperature'].agg('max') - sci_data.groupby('profile_id')['temperature'].agg('min')
@@ -191,7 +194,7 @@ for iter in range(n_profiles):
     elif iter<(n_profiles-1):
         cond1 = profile_stats.loc[iter,'profile_direction']*profile_stats.loc[(iter+1),'profile_direction'] == -1
         cond2 = profile_stats.loc[iter,'profile_direction']*profile_stats.loc[(iter-1),'profile_direction'] == -1
-        profile_stats.loc[iter,'thermal_lag_flag'] = np.select([(cond1 | cond2) & cond3 & cond4 & cond5],[1],0)
+        profile_stats.loc[iter,'thermal_lag_flag'] = np.select([(cond1 or cond2) & cond3 & cond4 & cond5],[1],0)
 
     elif iter == (n_profiles-1):
         cond2 = profile_stats.loc[iter,'profile_direction']*profile_stats.loc[(iter-1),'profile_direction'] == -1
@@ -211,9 +214,19 @@ for iter in range(n_profiles):
 
 #Step 3
 
-for iter in range(n_profiles):
+for iter in range(n_profiles-1):
     idx1 = (sci_data['profile_id'] == iter)
-    idx2 = (sci_data['profile_id'] == (iter+1))
+    if iter == 0:
+        idx2 = (sci_data['profile_id'] == (iter+1))
+    elif iter == n_profiles-1:
+        idx2 = (sci_data['profile_id'] == (iter-1))
+    else:
+        below = np.abs(profile_stats.loc[iter,'profile_time'] - profile_stats.loc[iter-1,'profile_time'])
+        above = np.abs(profile_stats.loc[iter,'profile_time'] - profile_stats.loc[iter+1,'profile_time'])
+        if (below < above):
+            idx2 = (sci_data['profile_id'] == (iter-1))
+        else:
+            idx2 = (sci_data['profile_id'] == (iter+1))
 
     time1 = np.array(sci_data[idx1]['ctd_time'])
     temp1 = np.array(sci_data[idx1]['temperature'])
@@ -234,33 +247,47 @@ for iter in range(n_profiles):
         try:
             params = ftlpTS.findThermalLagParams_TS(time1, cond1, temp1, pres1, time2, cond2, temp2, pres2)
         except:
-            print(f"{iter} didn't work")
+            print(f"{iter} didn't work in TS space")
+            continue
 
     elif profile_stats.loc[iter,'thermal_lag_flag'] == 2:
         try:
             params = ftlpSP.findThermalLagParams_SP(time1, cond1, temp1, pres1, thermocline_pres1, time2, cond2, temp2, pres2, thermocline_pres2)     
         except:
-            print(f"{iter} didn't work")
+            print(f"{iter} didn't work in SP space")
+            continue
 
-        [temp_inside1,cond_outside1] = ctLag.correctThermalLag(time1,cond1,temp1,params.x)
-        [temp_inside2,cond_outside2] = ctLag.correctThermalLag(time2,cond2,temp2,params.x)
+    else:
+        continue
 
-        salt_cor1 = gsw.SP_from_C(np.multiply(cond_outside1,10),temp1,pres1)
+    [temp_inside1,cond_outside1] = ctLag.correctThermalLag(time1,cond1,temp1,params.x)
+    [temp_inside2,cond_outside2] = ctLag.correctThermalLag(time2,cond2,temp2,params.x)
 
-        saltA_outside1 = gsw.SA_from_SP(salt_cor1,pres1,lon1,lat1)
+    salt_cor1 = gsw.SP_from_C(np.multiply(cond_outside1,10),temp1,pres1)
 
-        ctemp_outside1 = gsw.CT_from_t(saltA_outside1, temp1, pres1)
+    saltA_outside1 = gsw.SA_from_SP(salt_cor1,pres1,lon1,lat1)
 
-        ptemp_outside1 = gsw.pt_from_CT(saltA_outside1, ctemp_outside1)
+    ctemp_outside1 = gsw.CT_from_t(saltA_outside1, temp1, pres1)
 
-        rho_outside1 = gsw.rho(saltA_outside1,ctemp_outside1,pres1)
+    ptemp_outside1 = gsw.pt_from_CT(saltA_outside1, ctemp_outside1)
 
-        sigma0_outside1 = gsw.sigma0(saltA_outside1,ctemp_outside1)
-        
-        profile_stats.loc[iter,'alpha'] = params.x[0]
-        profile_stats.loc[iter,'tau'] = params.x[1]
+    rho_outside1 = gsw.rho(saltA_outside1,ctemp_outside1,pres1)
+
+    sigma0_outside1 = gsw.sigma0(saltA_outside1,ctemp_outside1)
+    
+    profile_stats.loc[iter,'alpha'] = params.x[0]
+    profile_stats.loc[iter,'tau'] = params.x[1]
+
+    idfirst = sci_data['profile_id'].eq(iter).idxmax()
+    idlast = (sci_data['profile_id'].eq(iter+1).idxmax() - 1)
+
+    sci_data.loc[idfirst:idlast, 'salt_outside'] = salt_cor1
+    sci_data.loc[idfirst:idlast, 'saltA_outside'] = saltA_outside1
+    sci_data.loc[idfirst:idlast, 'ctemp_outside'] = ctemp_outside1
+    sci_data.loc[idfirst:idlast, 'ptemp_outside'] = ptemp_outside1
+    sci_data.loc[idfirst:idlast, 'rho_outside'] = rho_outside1
+    sci_data.loc[idfirst:idlast, 'sigma0_outside'] = sigma0_outside1
 
 print("--- %s seconds ---" % (time.time() - start_time))
 #profile_stats.to_clipboard()
 #sci_data.to_clipboard()
-
