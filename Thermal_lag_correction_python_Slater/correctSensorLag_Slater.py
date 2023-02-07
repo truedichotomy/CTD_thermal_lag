@@ -13,17 +13,16 @@ def correctSensorLag(timestamp, raw, params, flow=0):
 
     if constant_flow:
         # Positive time check to filter out bad initial lines on Slocum data.
-        valid = (timestamp > 0) & ~(np.isnan(raw))
-        #valid = (timestamp > 0) & ~np.isnan(raw); 
+        valid = (timestamp > 0) & ~(np.isnan(raw)) 
         # Time lag parameter is a constant scalar.
         tau = params
     else:
         # Positive time check to filter out bad initial lines on Slocum data.
-        valid = timestamp > 0 & ~(np.isnan(raw) | np.isnan(flow))
+        valid = (timestamp > 0) & ~(np.isnan(raw) | np.isnan(flow))
         # Compute dynamic time lag parameter inversely proportional to flow speed.
         tau_offset = params[0]
         tau_slope = params[1]
-        tau = tau_offset + np.divide(tau_slope,flow(valid))
+        tau = tau_offset + np.divide(tau_slope,flow[valid])
 
     cor = np.empty((len(raw),len(raw)))
     timestamp_valid = timestamp[valid]
