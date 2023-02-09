@@ -21,7 +21,7 @@ np.seterr(divide='ignore', invalid='ignore')
 #load dataset retrieved as .nc from "http://slocum-data.marine.rutgers.edu/erddap/tabledap/index.html?page=1&itemsPerPage=1000"
 #'/Users/jack/Documents/MARACOOS_02Jul_Aug2021_Haixing_Wang/maracoos_02-20210716T1814-profile-sci-delayed_71b8_2232_e294.nc'
 
-netcdfdata = '/Users/jack/Documents/GitHub/CTD_thermal_lag/Thermal_lag_correction_python_Slater/test_data/maracoos_02-20210716T1814-profile-sci-delayed_71b8_2232_e294.nc'
+netcdfdata = '/Users/jack/Documents/GitHub/CTD_thermal_lag/Thermal_lag_correction_python_Slater/test_data/maracoos_02-20210716T1814-profile-sci-delayed_df8f_1dbf_9682.nc'
 
 #open data as xarray
 ds = xr.open_dataset(netcdfdata)
