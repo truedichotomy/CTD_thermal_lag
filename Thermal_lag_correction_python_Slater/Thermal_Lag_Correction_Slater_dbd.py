@@ -294,10 +294,10 @@ def run_thermal_lag_params(group):
         lon2 = np.array(pair_group['longitude'])
 
 
-        if profile_stats.loc[iter,'thermal_lag_flag'] == 1:
+        if profile_stats.loc[profile_id,'thermal_lag_flag'] == 1:
             params = ftlpTS.findThermalLagParams_TS(time1, cond1, temp1, pres1, time2, cond2, temp2, pres2)
 
-        elif profile_stats.loc[iter,'thermal_lag_flag'] == 2:
+        elif profile_stats.loc[profile_id,'thermal_lag_flag'] == 2:
             params = ftlpSP.findThermalLagParams_SP(time1, cond1, temp1, pres1, thermocline_pres1, time2, cond2, temp2, pres2, thermocline_pres2)
 
         [temp_inside1,cond_outside1] = ctLag.correctThermalLag(time1,cond1,temp1,params.x)
