@@ -255,7 +255,6 @@ def find_interface_thickness_Daniel(group):
 
 result = profile_groups.apply(find_interface_thickness_Daniel)
 profile_groups = sci_data.groupby("profile_id")
-profile_groups = sci_data.groupby("profile_id")
 
 def find_gradient_per_profile(group):
     """
@@ -274,7 +273,6 @@ def find_gradient_per_profile(group):
     return group
 
 sci_data = profile_groups.apply(find_gradient_per_profile)
-profile_groups = sci_data.groupby("profile_id")
 profile_groups = sci_data.groupby("profile_id")
 
 def find_thermocline_z_p(group):
@@ -510,15 +508,15 @@ def before_and_after_TS(profile_groups, profile_groups_cor, profile):
     ax1 = fig.add_subplot(121)
     ax1.scatter(salinity, depth, 5, 'b', label=f'Profile {profile}')
     ax1.scatter(next_salinity, next_depth, 5, 'g', label=f'Profile {profile+comp}')
-    ax1.set_title(f'Profiles {profile} and {profile+1} Before Correction')
+    ax1.set_title(f'Profiles {profile} and {profile+comp} Before Correction')
     ax1.legend()
     ax1.set_xlabel('Salinity')
     ax1.set_ylabel('Depth (m)')
 
     ax2 = fig.add_subplot(122)
     ax2.scatter(salinity_cor, depth, 5, 'b', label=f'Profile {profile}')
-    ax2.scatter(next_salinity_cor, next_depth, 5, 'g', label=f'Profile {profile+comp}')
-    ax2.set_title(f'Profiles {profile} and {profile+1} After {cor_type} Correction')
+    ax2.scatter(next_salinity, next_depth, 5, 'g', label=f'Profile {profile+comp}')
+    ax2.set_title(f'Profiles {profile} and {profile+comp} After {cor_type} Correction')
     ax2.legend()
     ax2.set_xlabel('Salinity')
     ax2.set_ylabel('Depth (m)')
