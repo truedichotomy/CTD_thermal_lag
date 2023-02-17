@@ -26,8 +26,8 @@ def findThermalLagParams_SP(time1, cond1, temp1, pres1, thermocline_pres1, time2
         dens_cor1 = gsw.rho(salt_cor1,temp1,pres1)
         dens_cor2 = gsw.rho(salt_cor2,temp2,pres2)
 
-        dens_min = np.maximum(np.amin(dens_cor1),np.amin(dens_cor2))
-        dens_max = np.minimum(np.amax(dens_cor1),np.amax(dens_cor2))
+        dens_min = np.minimum(np.amin(dens_cor1),np.amin(dens_cor2))
+        dens_max = np.maximum(np.amax(dens_cor1),np.amax(dens_cor2))
         
         dens_mask1 = (dens_min <= dens_cor1) & (dens_cor1 <= dens_max)
         dens_mask2 = (dens_min <= dens_cor2) & (dens_cor2 <= dens_max)
@@ -61,11 +61,8 @@ def findThermalLagParams_SP(time1, cond1, temp1, pres1, thermocline_pres1, time2
 
         outline = spg.Polygon(points)
         area = outline.area
-
         return area
 
     params_guess = [0.0677,11.1431]
     params = scop.minimize(optimobjArea, params_guess, method='SLSQP', tol=1e-4)
     return params
-
-
