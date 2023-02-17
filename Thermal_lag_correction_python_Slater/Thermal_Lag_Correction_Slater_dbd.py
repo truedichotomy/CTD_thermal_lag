@@ -74,7 +74,7 @@ def prepare_data(data_files,cac_dir):
     sci_data['longitude'] = sci_data['longitude'].interpolate()
 
     #Drop all invalid and duplicate ctd timestamps and invalid lat/lon values
-    sci_data = sci_data[sci_data['ctd_time'].ne(0)].dropna(subset=['ctd_time']) 
+    sci_data = sci_data[sci_data['ctd_time'].ne(pd.Timestamp('1970-01-01 00:00:00.00'))].dropna(subset=['ctd_time']) 
     sci_data = sci_data.drop_duplicates(subset=['ctd_time'])
     sci_data = sci_data[sci_data['latitude'].ne(0)].dropna(subset=['latitude'])
     sci_data = sci_data[sci_data['longitude'].ne(0)].dropna(subset=['longitude'])

@@ -19,7 +19,7 @@ np.seterr(divide='ignore', invalid='ignore')
 #load dataset retrieved as .nc from "http://slocum-data.marine.rutgers.edu/erddap/tabledap/index.html?page=1&itemsPerPage=1000"
 #'/Users/jack/Documents/MARACOOS_02Jul_Aug2021_Haixing_Wang/maracoos_02-20210716T1814-profile-sci-delayed_71b8_2232_e294.nc'
 
-netcdfdata = '/Users/jack/Documents/GitHub/CTD_thermal_lag/Thermal_lag_correction_python_Slater/test_data/maracoos_02-20210716T1814-profile-sci-delayed_df8f_1dbf_9682.nc'
+netcdfdata = '/Users/jack/Documents/MARACOOS_02Jul_Aug2021_Haixing_Wang/maracoos_02-20210716T1814-profile-sci-delayed_71b8_2232_e294.nc'
 
 def prepare_data(netcdfdata):
     #open data as xarray
@@ -33,7 +33,9 @@ def prepare_data(netcdfdata):
     glider_sci.trajectory = str(glider_sci.trajectory)
 
     #drop all rows without ctd timestamp and duplicate ctd timestamps and rename to sci_data
-    sci_data = glider_sci[glider_sci['ctd41cp_timestamp'].astype(bool)]
+    
+    sci_data = glider_sci
+    sci_data = sci_data[sci_data['ctd41cp_timestamp'].ne(pd.Timestamp('1970-01-01 00:00:00.00'))].dropna(subset=['ctd41cp_timestamp']) 
     sci_data = sci_data.drop_duplicates(subset=['ctd41cp_timestamp'])
     sci_data.reset_index(drop=True,inplace=True) #reset indices
 
@@ -88,7 +90,7 @@ def lag_shift_smooth_data(group):
 
     tau_T = 0.53; # in seconds. nominal value is 0.5 second based on Johnson et al. 2007
     group['temperature_response_corrected_smooth'] = group['temperature_lag_shifted_smooth']
-    group.loc[1:,'temperature_response_corrected_smooth'] = group.loc[1:,'temperature_lag_shifted_smooth'].add(np.multiply(tau_T,dT_dt_smooth))
+    group.iloc[1:]['temperature_response_corrected_smooth'] = group.iloc[1:]['temperature_response_corrected_smooth'].add(np.multiply(tau_T,dT_dt_smooth))
 
     return group
 
@@ -398,7 +400,7 @@ def before_and_after_TS(profile_groups, profile_groups_cor, profile):
         above = np.abs(profile_stats.loc[profile,'profile_time'] - profile_stats.loc[profile+1,'profile_time'])
         if (below < above) & (profile_stats.loc[(profile-1),'thermal_lag_flag']!=0):
             comp=-1
-        elif (above > below) & (profile_stats.loc[(profile+1),'thermal_lag_flag']!=0):
+        elif (above < below) & (profile_stats.loc[(profile+1),'thermal_lag_flag']!=0):
             comp = 1
         elif (profile_stats.loc[(profile-1),'thermal_lag_flag']!=0):
             comp = -1
@@ -421,7 +423,7 @@ def before_and_after_TS(profile_groups, profile_groups_cor, profile):
         cor_type = 'NO'
 
     temp = group['temperature']
-    temp_cor = group_cor['temperature']
+    temp_cor = group_cor['ctemp_outside']
 
     salinity = group['salinity']
     salinity_cor = group_cor['salt_outside']
@@ -429,7 +431,7 @@ def before_and_after_TS(profile_groups, profile_groups_cor, profile):
     depth = group['z']
 
     next_temp = next_group['temperature']
-    next_temp_cor = next_group_cor['temperature']
+    next_temp_cor = next_group_cor['ctemp_outside']
 
     next_salinity = next_group['salinity']
     next_salinity_cor = next_group_cor['salt_outside']
@@ -439,21 +441,23 @@ def before_and_after_TS(profile_groups, profile_groups_cor, profile):
     fig = plt.figure(figsize=(10, 5))
 
     ax1 = fig.add_subplot(121)
-    ax1.scatter(salinity, depth, 5, 'b', label=f'Profile {profile}')
-    ax1.scatter(next_salinity, next_depth, 5, 'g', label=f'Profile {profile+comp}')
+    ax1.scatter(temp, depth, 5, 'b', label=f'Profile {profile}')
+    ax1.scatter(next_temp, next_depth, 5, 'g', label=f'Profile {profile+comp}')
     ax1.set_title(f'Profiles {profile} and {profile+comp} Before Correction')
     ax1.legend()
-    ax1.set_xlabel('Salinity')
+    ax1.invert_xaxis()
+    ax1.set_xlabel('Temperature (C)')
     ax1.set_ylabel('Depth (m)')
 
     ax2 = fig.add_subplot(122)
-    ax2.scatter(salinity_cor, depth, 5, 'b', label=f'Profile {profile}')
-    ax2.scatter(next_salinity, next_depth, 5, 'g', label=f'Profile {profile+comp}')
+    ax2.scatter(temp_cor, depth, 5, 'b', label=f'Profile {profile}')
+    ax2.scatter(next_temp, next_depth, 5, 'g', label=f'Profile {profile+comp}')
     ax2.set_title(f'Profiles {profile} and {profile+comp} After {cor_type} Correction')
     ax2.legend()
-    ax2.set_xlabel('Salinity')
+    ax2.invert_xaxis()
+    ax2.set_xlabel('Temperature (C)')
     ax2.set_ylabel('Depth (m)')
 
     plt.show()
 
-before_and_after_TS(profile_groups,profile_groups_cor, 302)
+before_and_after_TS(profile_groups,profile_groups_cor, 250)
