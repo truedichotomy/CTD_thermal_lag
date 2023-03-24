@@ -315,9 +315,9 @@ def run_thermal_lag_params(group):
                     pair_group = profile_groups.get_group(profile_id - 1)
                 elif (below > above) & (profile_stats.loc[(profile_id+1),'thermal_lag_flag']!=0):
                     pair_group = profile_groups.get_group(profile_id + 1)
-                elif (profile_stats.loc[(profile_id-1),'thermal_lag_flag']!=0):
+                elif (below < above * 2) & (profile_stats.loc[(profile_id-1),'thermal_lag_flag']!=0):
                     pair_group = profile_groups.get_group(profile_id - 1)
-                elif (profile_stats.loc[(profile_id+1),'thermal_lag_flag']!=0):
+                elif (below > above * 2) & (profile_stats.loc[(profile_id+1),'thermal_lag_flag']!=0):
                     pair_group = profile_groups.get_group(profile_id + 1)
                 else:
                     raise Exception("No valid profile to correct with")

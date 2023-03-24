@@ -380,9 +380,9 @@ def run_thermal_lag_params(group):
                     pair_group = profile_groups.get_group(profile_id - 1)
                 elif (below > above) & (profile_stats.loc[(profile_id+1),'thermal_lag_flag']!=0):
                     pair_group = profile_groups.get_group(profile_id + 1)
-                elif (profile_stats.loc[(profile_id-1),'thermal_lag_flag']!=0):
+                elif (below < above * 2) & (profile_stats.loc[(profile_id-1),'thermal_lag_flag']!=0):
                     pair_group = profile_groups.get_group(profile_id - 1)
-                elif (profile_stats.loc[(profile_id+1),'thermal_lag_flag']!=0):
+                elif (below > above * 2) & (profile_stats.loc[(profile_id+1),'thermal_lag_flag']!=0):
                     pair_group = profile_groups.get_group(profile_id + 1)
                 else:
                     raise Exception("No valid profile to correct with")
@@ -428,6 +428,7 @@ def run_thermal_lag_params(group):
             profile_stats.loc[profile_id,'alpha'] = params.x[0]
             profile_stats.loc[profile_id,'tau'] = params.x[1]
 
+            group['cond_outside'] = cond_outside1
             group['salt_outside'] = salt_cor1
             group['saltA_outside'] = saltA_outside1
             group['ctemp_outside'] = ctemp_outside1
@@ -508,8 +509,8 @@ def before_and_after_TS(profile_groups, profile_groups_cor, profile):
     fig = plt.figure(figsize=(10, 5))
 
     ax1 = fig.add_subplot(121)
-    ax1.scatter(temp, depth, 5, 'b', label=f'Profile {profile}')
-    ax1.scatter(next_temp, next_depth, 5, 'g', label=f'Profile {profile+comp}')
+    ax1.scatter(salinity, depth, 5, 'b', label=f'Profile {profile}')
+    ax1.scatter(next_salinity, next_depth, 5, 'g', label=f'Profile {profile+comp}')
     ax1.set_title(f'Profiles {profile} and {profile+comp} Before Correction')
     ax1.legend()
     ax1.invert_xaxis()
@@ -517,8 +518,8 @@ def before_and_after_TS(profile_groups, profile_groups_cor, profile):
     ax1.set_ylabel('Depth (m)')
 
     ax2 = fig.add_subplot(122)
-    ax2.scatter(temp_cor, depth, 5, 'b', label=f'Profile {profile}')
-    ax2.scatter(next_temp, next_depth, 5, 'g', label=f'Profile {profile+comp}')
+    ax2.scatter(salinity_cor, depth, 5, 'b', label=f'Profile {profile}')
+    ax2.scatter(next_salinity, next_depth, 5, 'g', label=f'Profile {profile+comp}')
     ax2.set_title(f'Profiles {profile} and {profile+comp} After {cor_type} Correction')
     ax2.legend()
     ax2.invert_xaxis()
