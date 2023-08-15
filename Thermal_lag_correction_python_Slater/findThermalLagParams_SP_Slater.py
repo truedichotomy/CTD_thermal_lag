@@ -3,8 +3,9 @@
 import numpy as np
 import correctThermalLag_Slater as ctlag
 import gsw
-import shapely.geometry as spg
 import scipy.optimize as scop
+from shapely.geometry import Polygon, MultiPolygon
+from shapely.ops import polygonize
 
 def findThermalLagParams_SP(time1, cond1, temp1, pres1, thermocline_pres1, time2, cond2, temp2, pres2, thermocline_pres2, flow1 = 0, flow2 = 0):
     if (flow1 & flow2) == 0:
@@ -59,9 +60,20 @@ def findThermalLagParams_SP(time1, cond1, temp1, pres1, thermocline_pres1, time2
         pres = np.append(nrmlpres1,nrmlpres2)
         points = np.concatenate([salt[:,None],pres[:,None]], axis=1)
 
-        outline = spg.Polygon(points)
-        area = outline.area
-        return area
+        polygon_points = points.tolist() #Area calculation code courtesy of Lori Garzio and Laura Nazarro
+        polygon_points.append(polygon_points[0])
+        polygon = Polygon(polygon_points)
+        polygon_lines = polygon.exterior
+        polygon_crossovers = polygon_lines.intersection(polygon_lines)
+        polygons = polygonize(polygon_crossovers)
+        valid_polygons = MultiPolygon(polygons)
+
+        profile_area = 0
+
+        for polygon in list(valid_polygons.geoms):
+            profile_area += polygon.area
+
+        return profile_area
 
     params_guess = [0.0677,11.1431]
     params = scop.minimize(optimobjArea, params_guess, method='SLSQP', tol=1e-4)
