@@ -20,11 +20,8 @@ np.seterr(divide='ignore', invalid='ignore')
 data_files = '/Users/jack/Documents/gliderData/sylvia-20180802/all_data/*.[D|E]BD'
 cac_dir = '/Users/jack/Documents/gliderData/sylvia-20180802/cache'
 
-#data_files = '/Users/jack/Documents/gliderData/sylvia-20180802/all_data/*.[D|E]BD'
-#cac_dir = '/Users/jack/Documents/gliderData/sylvia-20180802/cache'
-
-#data_files = '/Users/jack/oceansensing Dropbox/C2PO/glider/gliderData/sylvia-20160815-mares-complete/*/*/*.[D|E]BD'
-#cac_dir = '/Users/jack/oceansensing Dropbox/C2PO/glider/gliderData/sylvia-20160815-mares-complete/*/*/'
+#data_files = '/Users/jack/Documents/gliderData/all_electa_test/*.[d|e]bd'
+#cac_dir = '/Users/jack/Documents/gliderData/all_electa_cache_test'
 
 def prepare_data(data_files,cac_dir):
     """
@@ -39,28 +36,32 @@ def prepare_data(data_files,cac_dir):
         Pandas dataframe (group) with glider data prepared for thermal lag correction
     """
 
-    sensors = ['sci_ctd41cp_timestamp','sci_water_pressure','sci_water_temp','sci_water_cond','m_lat','m_lon','m_tot_num_inflections']
+    sensors = ['sci_m_present_time','sci_water_pressure','sci_water_temp','sci_water_cond','m_lat','m_lon','m_tot_num_inflections']
 
     dbd = dbdreader.MultiDBD(pattern=data_files,cacheDir=cac_dir) 
 
     tm,sensor_title=dbd.get(sensors[0])
     sensor0_time_pair = np.column_stack((tm, sensor_title))
-    sensor0_time_pair[:,0] = pd.to_datetime(sensor0_time_pair[:,0], unit='s')
+    sensor0_time_pair = sensor0_time_pair[~((sensor0_time_pair[:, 0] < sensor0_time_pair[0,0]) | (sensor0_time_pair[:, 0] > sensor0_time_pair[-1,0]))]
+    #sensor0_time_pair[:,0] = pd.to_datetime(sensor0_time_pair[:,0], unit='s')
     glider_sci = pd.DataFrame(sensor0_time_pair,columns=['time',sensors[0]])
-    glider_sci['time'] = pd.to_datetime(glider_sci['time'])
+    #glider_sci['time'] = pd.to_datetime(glider_sci['time'])
 
     for sensor_titles in sensors[1:]:
         dbd=dbdreader.MultiDBD(pattern=data_files,cacheDir=cac_dir)    
         tm,sensor_data=dbd.get(sensor_titles)
         sensor_time_pair = np.column_stack((tm, sensor_data))
-        sensor_time_pair[:,0] = pd.to_datetime(sensor_time_pair[:,0], unit='s')
+        sensor_time_pair = sensor_time_pair[~((sensor_time_pair[:, 0] < sensor0_time_pair[0,0]) | (sensor_time_pair[:, 0] > sensor_time_pair[-1,0]))]
+        #sensor_time_pair[:,0] = pd.to_datetime(sensor_time_pair[:,0], unit='s')
         sensor_time_df = pd.DataFrame(sensor_time_pair,columns=['time',sensor_titles])
-        sensor_time_df['time'] = pd.to_datetime(sensor_time_df['time'])
+        #sensor_time_df['time'] = pd.to_datetime(sensor_time_df['time'])
         glider_sci = glider_sci.merge(sensor_time_df, on='time', how='outer').sort_values(by='time')
         glider_sci = glider_sci.reset_index(drop=True)
 
+    glider_sci['time'] = pd.to_datetime(glider_sci['time'], unit='s')
+
     #drop all rows without ctd timestamp and duplicate ctd timestamps and rename columns and data frame to sci_data
-    sci_data = glider_sci.rename(columns={"sci_ctd41cp_timestamp": "ctd_time", "sci_water_pressure": "pressure", "sci_water_temp": "temperature", \
+    sci_data = glider_sci.rename(columns={"sci_m_present_time": "ctd_time", "sci_water_pressure": "pressure", "sci_water_temp": "temperature", \
         "sci_water_cond": "conductivity","m_lat":"latitude","m_lon":"longitude"})
 
     #assign profiles ids based on m_tot_num_inflections
@@ -78,6 +79,7 @@ def prepare_data(data_files,cac_dir):
     sci_data = sci_data.drop_duplicates(subset=['ctd_time'])
     sci_data = sci_data[sci_data['latitude'].ne(0)].dropna(subset=['latitude'])
     sci_data = sci_data[sci_data['longitude'].ne(0)].dropna(subset=['longitude'])
+    sci_data = sci_data.dropna(subset=['pressure'])
 
     #Create profile_id column based on when the m_tot_num_inflections variable iterates
     sci_data['profile_id'] = sci_data.groupby('m_tot_num_inflections').ngroup()
@@ -89,9 +91,12 @@ def prepare_data(data_files,cac_dir):
     sci_data['salinity'] = gsw.SP_from_C(sci_data['conductivity_ms_cm'].values,\
                                         sci_data['temperature'].values,sci_data['pressure'].values) # calculate salinity using gsw
     
+    sci_data = sci_data.dropna(subset=['z'])
+
     return sci_data
 
 sci_data = prepare_data(data_files,cac_dir)
+
 profile_groups = sci_data.groupby("profile_id") #groupby profile ID
 
 def drop_top_and_bottom(group,top_cut,bottom_cut):
@@ -196,6 +201,7 @@ profile_stats['profile_direction'] = np.select([profile_stats['pressure_diff'] >
     profile_stats['pressure_diff'] <= -profile_pressure_range_cutoff],[1,-1],0) #1 is downcast, -1 is upcast, 0 is null
 
 profile_stats['stratification_flag'] = np.select([profile_stats['temperature_diff'] >= temperature_diff_cutoff],[1],0)
+
 profile_groups = sci_data.groupby("profile_id")
 
 def find_interface_thickness_percentiles(group):
@@ -255,6 +261,7 @@ def find_interface_thickness_Daniel(group):
         profile_stats.loc[profile_id,'interface_thickness'] = interface_thickness
 
 result = profile_groups.apply(find_interface_thickness_Daniel)
+
 profile_groups = sci_data.groupby("profile_id")
 
 def find_gradient_per_profile(group):
@@ -274,6 +281,7 @@ def find_gradient_per_profile(group):
     return group
 
 sci_data = profile_groups.apply(find_gradient_per_profile)
+
 profile_groups = sci_data.groupby("profile_id")
 
 def find_thermocline_z_p(group):
@@ -297,6 +305,7 @@ def find_thermocline_z_p(group):
         profile_stats.loc[profile_id,'thermocline_pressure'] = group['pressure_lag_shifted_smooth'][ind1].mean()
 
 result = profile_groups.apply(find_thermocline_z_p)
+
 profile_groups = sci_data.groupby("profile_id")
 
 def assign_TS_flag(group):
@@ -354,9 +363,44 @@ def assign_SP_flag(group):
     profile_stats.loc[profile_id,'thermal_lag_flag'] = np.select([cond6 & cond7 & cond8 & cond9 & cond10 & cond11],[2],current)
 
 result = profile_groups.apply(assign_SP_flag)
+
 #Step 3
-profile_groups = sci_data.groupby("profile_id")
-def run_thermal_lag_params(group):
+def assign_pair_group(group, profile_stats):
+    n_profiles = len(profile_stats)
+    profile_id = group.iloc[0]['profile_id']
+    if profile_stats.loc[profile_id, 'thermal_lag_flag'] != 0:
+        if profile_id == 0:
+            if profile_stats.loc[(profile_id + 1), 'thermal_lag_flag'] != 0:
+                pair_group = profile_id + 1
+            else:
+                pair_group = np.nan
+        elif (profile_id == n_profiles - 1) and (profile_stats.loc[(profile_id - 1), 'thermal_lag_flag'] != 0):
+            pair_group = profile_id - 1
+        else:
+            below = np.abs(profile_stats.loc[profile_id, 'profile_time'] - profile_stats.loc[profile_id - 1, 'profile_time'])
+            above = np.abs(profile_stats.loc[profile_id, 'profile_time'] - profile_stats.loc[profile_id + 1, 'profile_time'])
+            if (below < above) and (profile_stats.loc[(profile_id - 1), 'thermal_lag_flag'] != 0):
+                pair_group = profile_id - 1
+            elif (below > above) and (profile_stats.loc[(profile_id + 1), 'thermal_lag_flag'] != 0):
+                pair_group = profile_id + 1
+            elif (below < above * 2) and (profile_stats.loc[(profile_id - 1), 'thermal_lag_flag'] != 0):
+                pair_group = profile_id - 1
+            elif (below > above * 2) and (profile_stats.loc[(profile_id + 1), 'thermal_lag_flag'] != 0):
+                pair_group = profile_id + 1
+            else:
+                pair_group = np.nan
+
+        profile_stats.loc[profile_id, 'pair_group_id'] = pair_group
+
+    return profile_stats
+
+# Iterate through profile groups and update profile_stats iteratively
+for name, group in profile_groups:
+    profile_stats = assign_pair_group(group, profile_stats)
+
+# Reset indices
+profile_stats.reset_index(drop=True, inplace=True)
+def run_thermal_lag_params(group, profile_groups, profile_stats):
     """
     Performs correction using optimization function, then calculates final corrected profile values
 
@@ -369,26 +413,10 @@ def run_thermal_lag_params(group):
     profile_id = group.iloc[0]['profile_id']
     if profile_stats.loc[profile_id,'thermal_lag_flag'] != 0:
         try:
-            if (profile_id == 0) & (profile_stats.loc[(profile_id+1),'thermal_lag_flag']!=0):
-                pair_group = profile_groups.get_group(profile_id + 1)
-            elif (profile_id == n_profiles-1) & (profile_stats.loc[(profile_id-1),'thermal_lag_flag']!=0):
-                pair_group = profile_groups.get_group(profile_id - 1)
-            else:
-                below = np.abs(profile_stats.loc[profile_id,'profile_time'] - profile_stats.loc[profile_id-1,'profile_time'])
-                above = np.abs(profile_stats.loc[profile_id,'profile_time'] - profile_stats.loc[profile_id+1,'profile_time'])
-                if (below < above) & (profile_stats.loc[(profile_id-1),'thermal_lag_flag']!=0):
-                    pair_group = profile_groups.get_group(profile_id - 1)
-                elif (below > above) & (profile_stats.loc[(profile_id+1),'thermal_lag_flag']!=0):
-                    pair_group = profile_groups.get_group(profile_id + 1)
-                elif (below < above * 2) & (profile_stats.loc[(profile_id-1),'thermal_lag_flag']!=0):
-                    pair_group = profile_groups.get_group(profile_id - 1)
-                elif (below > above * 2) & (profile_stats.loc[(profile_id+1),'thermal_lag_flag']!=0):
-                    pair_group = profile_groups.get_group(profile_id + 1)
-                else:
-                    raise Exception("No valid profile to correct with")
 
-            profile_id2 = pair_group.iloc[0]['profile_id']
-
+            profile_id2 = profile_stats.loc[profile_id,'pair_group_id']
+            pair_group = profile_groups.get_group(profile_id2)
+            
             time1 = np.array(group['ctd_time'])
             temp1 = np.array(group['temperature'])
             cond1 = np.array(group['conductivity'])
@@ -436,7 +464,7 @@ def run_thermal_lag_params(group):
             group['rho_outside'] = rho_outside1
             group['sigma0_outside'] = sigma0_outside1
 
-            print(f'{profile_id} worked')
+            #print(f'{profile_id} was corrected')
         except Exception as e:
             print(f'{profile_id} did not work')
             print(e)
@@ -444,12 +472,13 @@ def run_thermal_lag_params(group):
     else:
         print(f'{profile_id} was not processed')
 
-sci_data_cor = profile_groups.apply(run_thermal_lag_params)
+sci_data_cor = profile_groups.apply(run_thermal_lag_params, profile_groups, profile_stats)
 sci_data_cor.reset_index(drop=True,inplace=True) #reset indices
+
 profile_groups_cor = sci_data_cor.groupby('profile_id')
 profile_groups = sci_data.groupby('profile_id')
 
-def before_and_after_TS(profile_groups, profile_groups_cor, profile):
+def before_and_after_correction(profile_groups, profile_groups_cor, profile_stats, profile):
     """
     Plots profile and its paired correction profile before and after correction
 
@@ -459,29 +488,12 @@ def before_and_after_TS(profile_groups, profile_groups_cor, profile):
     Returns:
         Two plots, one before correction and one after
     """
-    if profile == 0:
-        comp = 1
-    elif profile == n_profiles-1:
-        comp=-1
-    else:
-        below = np.abs(profile_stats.loc[profile,'profile_time'] - profile_stats.loc[profile-1,'profile_time'])
-        above = np.abs(profile_stats.loc[profile,'profile_time'] - profile_stats.loc[profile+1,'profile_time'])
-        if (below < above) & (profile_stats.loc[(profile-1),'thermal_lag_flag']!=0):
-            comp=-1
-        elif (above < below) & (profile_stats.loc[(profile+1),'thermal_lag_flag']!=0):
-            comp = 1
-        elif (profile_stats.loc[(profile-1),'thermal_lag_flag']!=0):
-            comp = -1
-        elif (profile_stats.loc[(profile+1),'thermal_lag_flag']!=0):
-            comp = 1
-        else:
-            raise Exception("No valid profile to correct with")
-
     group = profile_groups.get_group(profile)
     group_cor = profile_groups_cor.get_group(profile)
 
-    next_group = profile_groups.get_group(profile+comp)
-    next_group_cor = profile_groups_cor.get_group(profile+comp)
+    next_id = int(profile_stats.loc[profile,'pair_group_id'])
+    next_group = profile_groups.get_group(next_id)
+    next_group_cor = profile_groups_cor.get_group(next_id)
 
     if profile_stats.loc[profile,'thermal_lag_flag'] == 1:
         cor_type = 'TS'
@@ -510,22 +522,22 @@ def before_and_after_TS(profile_groups, profile_groups_cor, profile):
 
     ax1 = fig.add_subplot(121)
     ax1.scatter(salinity, depth, 5, 'b', label=f'Profile {profile}')
-    ax1.scatter(next_salinity, next_depth, 5, 'g', label=f'Profile {profile+comp}')
-    ax1.set_title(f'Profiles {profile} and {profile+comp} Before Correction')
+    ax1.scatter(next_salinity, next_depth, 5, 'g', label=f'Profile {next_id}')
+    ax1.set_title(f'Profiles {profile} and {next_id} Before Correction')
     ax1.legend()
     ax1.invert_xaxis()
-    ax1.set_xlabel('Temperature (C)')
+    ax1.set_xlabel('Salinity')
     ax1.set_ylabel('Depth (m)')
 
     ax2 = fig.add_subplot(122)
     ax2.scatter(salinity_cor, depth, 5, 'b', label=f'Profile {profile}')
-    ax2.scatter(next_salinity, next_depth, 5, 'g', label=f'Profile {profile+comp}')
-    ax2.set_title(f'Profiles {profile} and {profile+comp} After {cor_type} Correction')
+    ax2.scatter(next_salinity_cor, next_depth, 5, 'g', label=f'Profile {next_id}')
+    ax2.set_title(f'Profiles {profile} and {next_id} After {cor_type} Correction')
     ax2.legend()
     ax2.invert_xaxis()
-    ax2.set_xlabel('Temperature (C)')
+    ax2.set_xlabel('Salinity')
     ax2.set_ylabel('Depth (m)')
 
     plt.show()
 
-before_and_after_TS(profile_groups,profile_groups_cor, 250)
+before_and_after_correction(profile_groups,profile_groups_cor, profile_stats, 85)
